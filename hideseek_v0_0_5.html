@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Прятки 3D v0.0.5 — ArtemiyKlADiamond Games</title>
+    <style>
+        :root {
+            --primary: #00d2d3;
+            --accent: #f1c40f;
+            --bg-dark: rgba(15, 20, 24, 0.94);
+            --panel: #2c3e50;
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            user-select: none;
+            background-color: #000;
+            color: #fff;
+        }
+
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 18px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9);
+            pointer-events: none;
+            z-index: 5;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .hud-card {
+            background: rgba(0, 0, 0, 0.6);
+            padding: 8px 15px;
+            border-radius: 8px;
+            border-left: 4px solid var(--primary);
+            backdrop-filter: blur(4px);
+        }
+
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 8px;
+            height: 8px;
+            background-color: rgba(255, 255, 255, 0.9);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            border: 2px solid rgba(0, 0, 0, 0.6);
+            z-index: 5;
+        }
+
+        .modal {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: var(--bg-dark);
+            backdrop-filter: blur(12px);
+            padding: 25px;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            z-index: 10;
+            width: 90%;
+            max-width: 520px;
+            max-height: 85vh;
+            overflow-y: auto;
+            text-align: center;
+        }
+
+        .brand-title {
+            color: var(--accent);
+            font-size: 14px;
+            font-weight: bold;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+
+        .age-rating {
+            display: inline-block;
+            background: #e74c3c;
+            color: white;
+            font-weight: bold;
+            font-size: 12px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+
+        h1 { margin: 5px 0 15px 0; font-size: 26px; }
+        h2 { font-size: 20px; color: var(--primary); border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; }
+
+        button, select {
+            background: linear-gradient(135deg, #00d2d3, #00a8ff);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 6px;
+            font-size: 15px;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 15px rgba(0, 210, 211, 0.3);
+        }
+
+        select {
+            background: #2c3e50;
+            outline: none;
+            box-shadow: none;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 210, 211, 0.5);
+        }
+
+        button.btn-secondary {
+            background: #34495e;
+            box-shadow: none;
+        }
+
+        button.btn-secondary:hover {
+            background: #2c3e50;
+        }
+
+        .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 12px 0;
+            font-size: 14px;
+        }
+
+        .disclaimer-box {
+            background: rgba(231, 76, 60, 0.15);
+            border: 1px solid #e74c3c;
+            color: #ff7675;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 11px;
+            margin-top: 15px;
+            line-height: 1.4;
+        }
+
+        .games-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin: 15px 0;
+        }
+
+        .game-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 14px;
+            text-decoration: none;
+            color: white;
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .game-card:hover {
+            background: rgba(0, 210, 211, 0.2);
+            border-color: var(--primary);
+            transform: scale(1.04);
+        }
+
+        .game-icon {
+            font-size: 34px;
+            margin-bottom: 6px;
+        }
+
+        .game-title {
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        .help-text {
+            text-align: left;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #dcdde1;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <div class="hud-card"><span id="timer">Время: --</span></div>
+        <div class="hud-card"><span id="score">Найдено: 0 / 5</span></div>
+        <div class="hud-card" style="border-left-color: var(--accent);">
+            💎 <span id="diacoins-hud">ДиаКоины: 0</span>
+        </div>
+    </div>
+
+    <div id="crosshair"></div>
+
+    <div id="start-menu" class="modal">
+        <div class="brand-title">ArtemiyKlADiamond Games</div>
+        <h1>Прятки 3D <span class="age-rating">6+</span></h1>
+        <p id="desc" style="color: #a4b0be; font-size: 14px;">Версия v0.0.5 — Умные жители и деревенские укрытия!</p>
+
+        <div class="setting-row" style="justify-content: center; gap: 10px;">
+            <span id="st-mode">Время на поиск:</span>
+            <select id="time-mode-select">
+                <option value="10">10 сек (Экстрим)</option>
+                <option value="20">20 сек (Быстрый)</option>
+                <option value="30" selected>30 сек (Стандарт)</option>
+                <option value="45">45 сек (Загул)</option>
+                <option value="60">60 сек (Разведка)</option>
+            </select>
+        </div>
+
+        <div>
+            <button id="btn-play">Играть</button>
+            <button id="btn-games-open" class="btn-secondary">Другие игры</button>
+        </div>
+        <div>
+            <button id="btn-settings-open" class="btn-secondary">Настройки</button>
+            <button id="btn-help-open" class="btn-secondary">Справка</button>
+        </div>
+
+        <div class="disclaimer-box" id="disclaimer-text">
+            ⚠️ <b>ПРЕДУПРЕЖДЕНИЕ:</b> ДиаКоины (💎) являются исключительно внутриигровой валютой и НЕ покупаются/НЕ обмениваются на настоящие деньги. Остерегайтесь подделок!
+        </div>
+    </div>
+
+    <div id="games-menu" class="modal" style="display: none;">
+        <div class="brand-title">ArtemiyKlADiamond Games</div>
+        <h2 id="title-other-games">Другие игры</h2>
+        <p style="font-size: 12px; color: #a4b0be;" id="github-hint">Нажмите на игру, чтобы перейти на её GitHub-страницу:</p>
+
+        <div class="games-grid">
+            <a class="game-card" href="https://github.com/ThisGKlADiamond/Building-Villages-and-Towns" target="_blank" rel="noopener">
+                <div class="game-icon">🏰</div>
+                <div class="game-title">Постройка деревень</div>
+            </a>
+            <a class="game-card" href="https://github.com/ThisGKlADiamond/Hunters-for-Something" target="_blank" rel="noopener">
+                <div class="game-icon">👾</div>
+                <div class="game-title">Охотники за Нечто</div>
+            </a>
+        </div>
+
+        <button id="btn-games-close" class="btn-secondary">Назад</button>
+    </div>
+
+    <div id="settings-menu" class="modal" style="display: none;">
+        <h2 id="st-title">Настройки</h2>
+
+        <div class="setting-row">
+            <span id="st-lang">Язык:</span>
+            <button id="btn-lang" style="padding: 5px 12px; margin: 0;">RU</button>
+        </div>
+
+        <div class="setting-row">
+            <span id="st-sens">Чувствительность:</span>
+            <input type="range" id="sens-slider" min="0.1" max="2.0" step="0.1" value="0.5">
+        </div>
+
+        <div class="setting-row">
+            <span id="st-music">Музыка:</span>
+            <input type="range" id="music-slider" min="0" max="1" step="0.1" value="0.3">
+        </div>
+
+        <div class="setting-row">
+            <span id="st-sfx">Звуки:</span>
+            <input type="range" id="sfx-slider" min="0" max="1" step="0.1" value="0.7">
+        </div>
+
+        <button id="btn-settings-close" class="btn-secondary">Назад</button>
+    </div>
+
+    <div id="help-menu" class="modal" style="display: none;">
+        <h2 id="help-title">Справка и Правила</h2>
+        <div class="help-text">
+            <p><b>🎯 Цель игры:</b> Успеть найти всех 5 жителей, которые спрятались в деревне!</p>
+            <p><b>🎮 Управление:</b><br>
+            • <b>WASD</b> — Движение<br>
+            • <b>Мышь</b> — Обзор<br>
+            • <b>ЛКМ</b> — Поймать найденного жителя<br>
+            • <b>ПКМ</b> — Открыть дверь дома или крышку бочки!</p>
+            <p><b>🧠 Умный AI:</b> Жители больше не стоят на открытых местах, а прячутся вглуби за домами, огородами и бочками!</p>
+            <p><b>💎 ДиаКоины:</b> +10 💎 за каждого пойманого жителя.</p>
+        </div>
+        <button id="btn-help-close" class="btn-secondary">Назад</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
+
+    <script>
+        // --- Баланс ДиаКоинов ---
+        let diaCoins = parseInt(localStorage.getItem('akd_diacoins')) || 0;
+
+        function addDiaCoins(amount) {
+            diaCoins += amount;
+            localStorage.setItem('akd_diacoins', diaCoins);
+            updateUI();
+        }
+
+        // --- Перевод ---
+        const i18n = {
+            ru: {
+                title: "Прятки 3D v0.0.5",
+                desc: "Умные жители и деревенские укрытия!",
+                play: "Играть",
+                settings: "Настройки",
+                otherGames: "Другие игры",
+                help: "Справка",
+                stTitle: "Настройки",
+                stLang: "Язык:",
+                stSens: "Чувствительность:",
+                stMusic: "Музыка:",
+                stSfx: "Звуки:",
+                stMode: "Время на поиск:",
+                back: "Назад",
+                timer: "Время: ",
+                score: "Найдено: ",
+                coins: "ДиаКоины: ",
+                win: "Поздравляем! Вы нашли всех жителей!",
+                lose: "Время вышло! Найдено жителей: ",
+                disclaimer: "⚠️ ПРЕДУПРЕЖДЕНИЕ: ДиаКоины (💎) являются исключительно внутриигровой валютой и НЕ покупаются/НЕ обмениваются на настоящие деньги. Остерегайтесь подделок!",
+                ghHint: "Нажмите на игру, чтобы перейти на её GitHub-страницу:"
+            },
+            en: {
+                title: "Hide & Seek 3D v0.0.5",
+                desc: "Smart villagers & Village spots!",
+                play: "Play",
+                settings: "Settings",
+                otherGames: "Other Games",
+                help: "Help",
+                stTitle: "Settings",
+                stLang: "Language:",
+                stSens: "Sensitivity:",
+                stMusic: "Music:",
+                stSfx: "SFX Volume:",
+                stMode: "Time limit:",
+                back: "Back",
+                timer: "Time: ",
+                score: "Found: ",
+                coins: "DiaCoins: ",
+                win: "Congratulations! You found everyone!",
+                lose: "Time's up! Villagers found: ",
+                disclaimer: "⚠️ WARNING: DiaCoins (💎) are in-game currency only and CANNOT be bought or exchanged for real money. Beware of fakes!",
+                ghHint: "Click on a game to visit its GitHub repository:"
+            }
+        };
+
+        let currentLang = 'ru';
+
+        function updateLanguage() {
+            const t = i18n[currentLang];
+            document.getElementById('desc').innerText = t.desc;
+            document.getElementById('btn-play').innerText = t.play;
+            document.getElementById('btn-settings-open').innerText = t.settings;
+            document.getElementById('btn-games-open').innerText = t.otherGames;
+            document.getElementById('btn-help-open').innerText = t.help;
+            document.getElementById('st-title').innerText = t.stTitle;
+            document.getElementById('st-lang').innerText = t.stLang;
+            document.getElementById('st-sens').innerText = t.stSens;
+            document.getElementById('st-music').innerText = t.stMusic;
+            document.getElementById('st-sfx').innerText = t.stSfx;
+            document.getElementById('st-mode').innerText = t.stMode;
+            document.getElementById('btn-settings-close').innerText = t.back;
+            document.getElementById('btn-games-close').innerText = t.back;
+            document.getElementById('btn-help-close').innerText = t.back;
+            document.getElementById('btn-lang').innerText = currentLang.toUpperCase();
+            document.getElementById('disclaimer-text').innerText = t.disclaimer;
+            document.getElementById('github-hint').innerText = t.ghHint;
+            document.getElementById('title-other-games').innerText = t.otherGames;
+
+            updateUI();
+        }
+
+        // --- Аудио Генератор ---
+        class SoundSystem {
+            constructor() {
+                this.ctx = null;
+                this.musicVolume = 0.3;
+                this.sfxVolume = 0.7;
+                this.musicInterval = null;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            }
+
+            playTone(freq, duration, type = 'sine', volume = 1) {
+                if (!this.ctx || this.sfxVolume === 0) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                gain.gain.setValueAtTime(volume * this.sfxVolume, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + duration);
+            }
+
+            playInteractSound() {
+                this.playTone(350, 0.08, 'square');
+            }
+
+            playFoundSound() {
+                this.playTone(523.25, 0.1, 'triangle');
+                setTimeout(() => this.playTone(659.25, 0.15, 'triangle'), 80);
+            }
+
+            playWinSound() {
+                const notes = [523.25, 659.25, 783.99, 1046.50];
+                notes.forEach((n, i) => setTimeout(() => this.playTone(n, 0.2, 'sine'), i * 120));
+            }
+
+            playLoseSound() {
+                this.playTone(300, 0.2, 'sawtooth');
+                setTimeout(() => this.playTone(200, 0.4, 'sawtooth'), 200);
+            }
+
+            startMusic() {
+                if (this.musicInterval || !this.ctx) return;
+                let step = 0;
+                const freqs = [110, 130.81, 146.83, 164.81];
+
+                this.musicInterval = setInterval(() => {
+                    if (this.musicVolume > 0) {
+                        const osc = this.ctx.createOscillator();
+                        const gain = this.ctx.createGain();
+                        osc.type = 'sine';
+                        osc.frequency.setValueAtTime(freqs[step % freqs.length], this.ctx.currentTime);
+                        gain.gain.setValueAtTime(this.musicVolume * 0.1, this.ctx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.8);
+                        osc.connect(gain);
+                        gain.connect(this.ctx.destination);
+                        osc.start();
+                        osc.stop(this.ctx.currentTime + 0.8);
+                        step++;
+                    }
+                }, 800);
+            }
+
+            stopMusic() {
+                if (this.musicInterval) {
+                    clearInterval(this.musicInterval);
+                    this.musicInterval = null;
+                }
+            }
+        }
+
+        const audio = new SoundSystem();
+
+        // --- Three.js Сцена ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87ceeb);
+        scene.fog = new THREE.Fog(0x87ceeb, 15, 60);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new THREE.PointerLockControls(camera, document.body);
+
+        const sensSlider = document.getElementById('sens-slider');
+        sensSlider.addEventListener('input', () => controls.pointerSpeed = parseFloat(sensSlider.value));
+
+        // Элементы UI
+        const startMenu = document.getElementById('start-menu');
+        const settingsMenu = document.getElementById('settings-menu');
+        const gamesMenu = document.getElementById('games-menu');
+        const helpMenu = document.getElementById('help-menu');
+        const timeModeSelect = document.getElementById('time-mode-select');
+
+        let selectedTimeLimit = parseInt(timeModeSelect.value);
+        let timeLeft = selectedTimeLimit;
+
+        timeModeSelect.addEventListener('change', (e) => {
+            selectedTimeLimit = parseInt(e.target.value);
+            timeLeft = selectedTimeLimit;
+            updateUI();
+        });
+
+        document.getElementById('btn-play').addEventListener('click', () => {
+            audio.init();
+            audio.startMusic();
+            timeLeft = selectedTimeLimit;
+            updateUI();
+            controls.lock();
+        });
+
+        document.getElementById('btn-settings-open').addEventListener('click', () => { startMenu.style.display = 'none'; settingsMenu.style.display = 'block'; });
+        document.getElementById('btn-settings-close').addEventListener('click', () => { settingsMenu.style.display = 'none'; startMenu.style.display = 'block'; });
+        document.getElementById('btn-games-open').addEventListener('click', () => { startMenu.style.display = 'none'; gamesMenu.style.display = 'block'; });
+        document.getElementById('btn-games-close').addEventListener('click', () => { gamesMenu.style.display = 'none'; startMenu.style.display = 'block'; });
+        document.getElementById('btn-help-open').addEventListener('click', () => { startMenu.style.display = 'none'; helpMenu.style.display = 'block'; });
+        document.getElementById('btn-help-close').addEventListener('click', () => { helpMenu.style.display = 'none'; startMenu.style.display = 'block'; });
+
+        document.getElementById('btn-lang').addEventListener('click', () => {
+            currentLang = currentLang === 'ru' ? 'en' : 'ru';
+            updateLanguage();
+        });
+
+        document.getElementById('music-slider').addEventListener('input', (e) => audio.musicVolume = parseFloat(e.target.value));
+        document.getElementById('sfx-slider').addEventListener('input', (e) => audio.sfxVolume = parseFloat(e.target.value));
+
+        controls.addEventListener('lock', () => {
+            startMenu.style.display = 'none';
+            settingsMenu.style.display = 'none';
+            gamesMenu.style.display = 'none';
+            helpMenu.style.display = 'none';
+        });
+
+        controls.addEventListener('unlock', () => {
+            if (!gameOver) startMenu.style.display = 'block';
+        });
+
+        // Свет
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(20, 40, 20);
+        scene.add(dirLight);
+
+        // Земля
+        const MAP_SIZE = 60;
+        const floorGeo = new THREE.PlaneGeometry(MAP_SIZE, MAP_SIZE);
+        const floorMat = new THREE.MeshLambertMaterial({ color: 0x4caf50 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        scene.add(floor);
+
+        // Препятствия & Интерактивные объекты
+        const obstacles = [];
+        const interactables = []; // Двери, крышки бочек
+        const smartHidingSpots = []; // Точки укрытий AI
+
+        // --- Генерация Деревни ---
+        function createHouse(x, z) {
+            const houseGroup = new THREE.Group();
+            houseGroup.position.set(x, 0, z);
+
+            // Стены дома
+            const wallGeo = new THREE.BoxGeometry(6, 4, 6);
+            const wallMat = new THREE.MeshLambertMaterial({ color: 0x8d6e63 });
+            const walls = new THREE.Mesh(wallGeo, wallMat);
+            walls.position.y = 2;
+            houseGroup.add(walls);
+            obstacles.push(walls);
+
+            // Крыша
+            const roofGeo = new THREE.ConeGeometry(5, 3, 4);
+            const roofMat = new THREE.MeshLambertMaterial({ color: 0xb71c1c });
+            const roof = new THREE.Mesh(roofGeo, roofMat);
+            roof.position.y = 5.5;
+            roof.rotation.y = Math.PI / 4;
+            houseGroup.add(roof);
+
+            // Дверь (Интерактивная на ПКМ)
+            const doorGeo = new THREE.BoxGeometry(1.2, 2.2, 0.1);
+            const doorMat = new THREE.MeshLambertMaterial({ color: 0x4e342e });
+            const door = new THREE.Mesh(doorGeo, doorMat);
+            door.position.set(0, 1.1, 3.05);
+            door.userData = { open: false, isDoor: true };
+            houseGroup.add(door);
+            interactables.push(door);
+
+            scene.add(houseGroup);
+
+            // Добавляем укромные места за домом
+            smartHidingSpots.push(
+                new THREE.Vector3(x - 3.5, 1, z - 3.5),
+                new THREE.Vector3(x + 3.5, 1, z - 3.5),
+                new THREE.Vector3(x, 1, z - 3.5)
+            );
+        }
+
+        function createGarden(x, z) {
+            // Огород
+            const plotGeo = new THREE.BoxGeometry(5, 0.2, 4);
+            const plotMat = new THREE.MeshLambertMaterial({ color: 0x5d4037 });
+            const plot = new THREE.Mesh(plotGeo, plotMat);
+            plot.position.set(x, 0.1, z);
+            scene.add(plot);
+
+            // Заборчик вокруг огорода
+            const fenceGeo = new THREE.BoxGeometry(5.2, 0.8, 0.1);
+            const fenceMat = new THREE.MeshLambertMaterial({ color: 0xa1887f });
+            const fence = new THREE.Mesh(fenceGeo, fenceMat);
+            fence.position.set(x, 0.4, z + 2);
+            scene.add(fence);
+            obstacles.push(fence);
+
+            // Растения
+            for (let i = -1.8; i <= 1.8; i += 1.2) {
+                const vegGeo = new THREE.SphereGeometry(0.3, 8, 8);
+                const vegMat = new THREE.MeshLambertMaterial({ color: 0x2e7d32 });
+                const veg = new THREE.Mesh(vegGeo, vegMat);
+                veg.position.set(x + i, 0.3, z);
+                scene.add(veg);
+            }
+
+            smartHidingSpots.push(new THREE.Vector3(x, 1, z - 2.2));
+        }
+
+        function createBarrel(x, z) {
+            const barrelGroup = new THREE.Group();
+            barrelGroup.position.set(x, 0, z);
+
+            const bGeo = new THREE.CylinderGeometry(0.8, 0.8, 2, 12);
+            const bMat = new THREE.MeshLambertMaterial({ color: 0x6d4c41 });
+            const barrel = new THREE.Mesh(bGeo, bMat);
+            barrel.position.y = 1;
+            barrelGroup.add(barrel);
+            obstacles.push(barrel);
+
+            // Крышка (Интерактивная ПКМ)
+            const lidGeo = new THREE.CylinderGeometry(0.85, 0.85, 0.1, 12);
+            const lidMat = new THREE.MeshLambertMaterial({ color: 0x3e2723 });
+            const lid = new THREE.Mesh(lidGeo, lidMat);
+            lid.position.y = 2.05;
+            lid.userData = { open: false, isLid: true };
+            barrelGroup.add(lid);
+            interactables.push(lid);
+
+            scene.add(barrelGroup);
+            smartHidingSpots.push(new THREE.Vector3(x + 1.2, 1, z));
+        }
+
+        // Спавн деревни
+        createHouse(-12, -12);
+        createHouse(12, -10);
+        createHouse(-10, 12);
+        createGarden(0, -15);
+        createGarden(12, 10);
+        createBarrel(-4, -5);
+        createBarrel(5, 4);
+        createBarrel(-15, 2);
+
+        // --- Жители (Умный AI Спавн) ---
+        const totalVillagers = 5;
+        let villagersFound = 0;
+        const villagers = [];
+        const villagerGeo = new THREE.CylinderGeometry(0.5, 0.5, 2, 16);
+        const villagerMat = new THREE.MeshLambertMaterial({ color: 0xff0000 });
+
+        // Перемешиваем smartHidingSpots и выбираем наилучшие
+        smartHidingSpots.sort(() => Math.random() - 0.5);
+
+        for (let i = 0; i < totalVillagers; i++) {
+            const v = new THREE.Mesh(villagerGeo, villagerMat);
+
+            // Берем укромную позицию из списка AI укрытий
+            const spot = smartHidingSpots[i % smartHidingSpots.length];
+            v.position.copy(spot);
+            v.userData = { found: false };
+
+            scene.add(v);
+            villagers.push(v);
+        }
+
+        // Физика
+        const playerRadius = 0.6;
+        camera.position.set(0, 1.6, 18);
+
+        function checkCollision(newPos) {
+            const halfMap = MAP_SIZE / 2 - 1;
+            if (Math.abs(newPos.x) > halfMap || Math.abs(newPos.z) > halfMap) return true;
+
+            const playerBox = new THREE.Box3().setFromCenterAndSize(
+                new THREE.Vector3(newPos.x, 1, newPos.z),
+                new THREE.Vector3(playerRadius * 2, 2, playerRadius * 2)
+            );
+
+            for (let obs of obstacles) {
+                if (playerBox.intersectsBox(new THREE.Box3().setFromObject(obs))) return true;
+            }
+            return false;
+        }
+
+        // Таймер
+        let gameOver = false;
+
+        function updateUI() {
+            const t = i18n[currentLang];
+            document.getElementById('timer').innerText = t.timer + timeLeft + "с";
+            document.getElementById('score').innerText = `${t.score} ${villagersFound} / ${totalVillagers}`;
+            document.getElementById('diacoins-hud').innerText = `${t.coins} ${diaCoins}`;
+        }
+
+        const countdown = setInterval(() => {
+            if (controls.isLocked && !gameOver) {
+                timeLeft--;
+                updateUI();
+                if (timeLeft <= 0) endGame(false);
+            }
+        }, 1000);
+
+        function endGame(isWin) {
+            gameOver = true;
+            clearInterval(countdown);
+            controls.unlock();
+            audio.stopMusic();
+
+            const t = i18n[currentLang];
+            if (isWin) {
+                audio.playWinSound();
+                alert(t.win);
+            } else {
+                audio.playLoseSound();
+                alert(t.lose + `${villagersFound} / ${totalVillagers}`);
+            }
+            location.reload();
+        }
+
+        // --- Обработка Кликов (ЛКМ - Поимка, ПКМ - Открытие дверей/бочек) ---
+        const raycaster = new THREE.Raycaster();
+
+        window.addEventListener('mousedown', (e) => {
+            if (!controls.isLocked || gameOver) return;
+
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+
+            // ЛКМ (Клик 0) — Искать жителей
+            if (e.button === 0) {
+                const intersects = raycaster.intersectObjects(villagers);
+                if (intersects.length > 0) {
+                    const hit = intersects[0];
+                    if (!hit.object.userData.found && hit.distance < 6) {
+                        hit.object.userData.found = true;
+                        hit.object.material.color.setHex(0x00ff00);
+
+                        audio.playFoundSound();
+                        villagersFound++;
+                        addDiaCoins(10);
+                        updateUI();
+
+                        if (villagersFound === totalVillagers) endGame(true);
+                    }
+                }
+            }
+            // ПКМ (Клик 2) — Открывать двери / бочки
+            else if (e.button === 2) {
+                const intersects = raycaster.intersectObjects(interactables);
+                if (intersects.length > 0) {
+                    const hit = intersects[0];
+                    if (hit.distance < 5) {
+                        const obj = hit.object;
+                        audio.playInteractSound();
+
+                        if (obj.userData.isDoor) {
+                            obj.userData.open = !obj.userData.open;
+                            obj.rotation.y = obj.userData.open ? Math.PI / 2 : 0;
+                        } else if (obj.userData.isLid) {
+                            obj.userData.open = !obj.userData.open;
+                            obj.position.y = obj.userData.open ? 2.8 : 2.05;
+                        }
+                    }
+                }
+            }
+        });
+
+        // Отключаем стандартное контекстное меню при клике ПКМ
+        window.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        // Движение
+        const keys = { KeyW: false, KeyS: false, KeyA: false, KeyD: false };
+        document.addEventListener('keydown', (e) => { if (e.code in keys) keys[e.code] = true; });
+        document.addEventListener('keyup', (e) => { if (e.code in keys) keys[e.code] = false; });
+
+        const moveSpeed = 0.12;
+        const velocity = new THREE.Vector3();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (controls.isLocked && !gameOver) {
+                velocity.x = Number(keys.KeyD) - Number(keys.KeyA);
+                velocity.z = Number(keys.KeyS) - Number(keys.KeyW);
+                velocity.normalize();
+
+                if (keys.KeyW || keys.KeyS || keys.KeyA || keys.KeyD) {
+                    const oldPos = camera.position.clone();
+                    controls.moveRight(velocity.x * moveSpeed);
+                    if (checkCollision(camera.position)) camera.position.x = oldPos.x;
+
+                    controls.moveForward(-velocity.z * moveSpeed);
+                    if (checkCollision(camera.position)) camera.position.z = oldPos.z;
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        updateLanguage();
+        animate();
+    </script>
+</body>
+</html>
