@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Прятки 3D v0.0.2</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            user-select: none;
+            background-color: #000;
+        }
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-size: 18px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            pointer-events: none;
+            z-index: 5;
+        }
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 8px;
+            height: 8px;
+            background-color: rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            border: 2px solid rgba(0, 0, 0, 0.5);
+            z-index: 5;
+        }
+        .modal {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            text-align: center;
+            background: rgba(20, 20, 20, 0.85);
+            backdrop-filter: blur(8px);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 10;
+            min-width: 320px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 10px 5px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 12px 0;
+            font-size: 14px;
+        }
+        input[type=range] {
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <div id="timer">Время: 10</div>
+        <div id="score">Найдено: 0 / 5</div>
+    </div>
+
+    <div id="crosshair"></div>
+
+    <div id="start-menu" class="modal">
+        <h1 id="title">Прятки v0.0.2</h1>
+        <p id="desc">Найдите всех жителей за 10 секунд!</p>
+        <button id="btn-play">Играть</button>
+        <button id="btn-settings-open">Настройки</button>
+    </div>
+
+    <div id="settings-menu" class="modal" style="display: none;">
+        <h2 id="st-title">Настройки</h2>
+
+        <div class="setting-row">
+            <span id="st-lang">Язык:</span>
+            <button id="btn-lang" style="padding: 5px 10px; margin: 0;">RU</button>
+        </div>
+
+        <div class="setting-row">
+            <span id="st-sens">Чувствительность:</span>
+            <input type="range" id="sens-slider" min="0.1" max="2.0" step="0.1" value="0.5">
+        </div>
+
+        <div class="setting-row">
+            <span id="st-music">Музыка:</span>
+            <input type="range" id="music-slider" min="0" max="1" step="0.1" value="0.3">
+        </div>
+
+        <div class="setting-row">
+            <span id="st-sfx">Звуки:</span>
+            <input type="range" id="sfx-slider" min="0" max="1" step="0.1" value="0.7">
+        </div>
+
+        <button id="btn-settings-close">Назад</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
+
+    <script>
+        // --- Локализация (i18n) ---
+        const i18n = {
+            ru: {
+                title: "Прятки v0.0.2",
+                desc: "Найдите всех жителей за 10 секунд!",
+                play: "Играть",
+                settings: "Настройки",
+                stTitle: "Настройки",
+                stLang: "Язык:",
+                stSens: "Чувствительность:",
+                stMusic: "Музыка:",
+                stSfx: "Звуковые эффекты:",
+                back: "Назад",
+                timer: "Время на поиск: ",
+                score: "Найдено жителей: ",
+                win: "Поздравляем! Вы нашли всех жителей!",
+                lose: "Время вышло! Найдено жителей: "
+            },
+            en: {
+                title: "Hide and Seek v0.0.2",
+                desc: "Find all villagers in 10 seconds!",
+                play: "Play",
+                settings: "Settings",
+                stTitle: "Settings",
+                stLang: "Language:",
+                stSens: "Sensitivity:",
+                stMusic: "Music:",
+                stSfx: "Sound Effects:",
+                back: "Back",
+                timer: "Time left: ",
+                score: "Villagers found: ",
+                win: "Congratulations! You found everyone!",
+                lose: "Time's up! Villagers found: "
+            }
+        };
+
+        let currentLang = 'ru';
+
+        function updateLanguage() {
+            const t = i18n[currentLang];
+            document.getElementById('title').innerText = t.title;
+            document.getElementById('desc').innerText = t.desc;
+            document.getElementById('btn-play').innerText = t.play;
+            document.getElementById('btn-settings-open').innerText = t.settings;
+            document.getElementById('st-title').innerText = t.stTitle;
+            document.getElementById('st-lang').innerText = t.stLang;
+            document.getElementById('st-sens').innerText = t.stSens;
+            document.getElementById('st-music').innerText = t.stMusic;
+            document.getElementById('st-sfx').innerText = t.stSfx;
+            document.getElementById('btn-settings-close').innerText = t.back;
+            document.getElementById('btn-lang').innerText = currentLang.toUpperCase();
+
+            updateUI();
+        }
+
+        // --- Аудиосистема (Web Audio API) ---
+        class SoundSystem {
+            constructor() {
+                this.ctx = null;
+                this.musicVolume = 0.3;
+                this.sfxVolume = 0.7;
+                this.musicInterval = null;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            }
+
+            playTone(freq, duration, type = 'sine', volume = 1) {
+                if (!this.ctx || this.sfxVolume === 0) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                gain.gain.setValueAtTime(volume * this.sfxVolume, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + duration);
+            }
+
+            playFoundSound() {
+                this.playTone(523.25, 0.1, 'triangle'); // C5
+                setTimeout(() => this.playTone(659.25, 0.15, 'triangle'), 80); // E5
+            }
+
+            playWinSound() {
+                const notes = [523.25, 659.25, 783.99, 1046.50];
+                notes.forEach((n, i) => {
+                    setTimeout(() => this.playTone(n, 0.2, 'sine'), i * 120);
+                });
+            }
+
+            playLoseSound() {
+                this.playTone(300, 0.2, 'sawtooth');
+                setTimeout(() => this.playTone(200, 0.4, 'sawtooth'), 200);
+            }
+
+            startMusic() {
+                if (this.musicInterval || !this.ctx) return;
+                let step = 0;
+                const baseFreqs = [110, 130.81, 146.83, 164.81]; // Am-аккорд фоном
+
+                this.musicInterval = setInterval(() => {
+                    if (this.musicVolume > 0) {
+                        const osc = this.ctx.createOscillator();
+                        const gain = this.ctx.createGain();
+                        osc.type = 'sine';
+                        osc.frequency.setValueAtTime(baseFreqs[step % baseFreqs.length], this.ctx.currentTime);
+                        gain.gain.setValueAtTime(this.musicVolume * 0.1, this.ctx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.8);
+                        osc.connect(gain);
+                        gain.connect(this.ctx.destination);
+                        osc.start();
+                        osc.stop(this.ctx.currentTime + 0.8);
+                        step++;
+                    }
+                }, 800);
+            }
+
+            stopMusic() {
+                if (this.musicInterval) {
+                    clearInterval(this.musicInterval);
+                    this.musicInterval = null;
+                }
+            }
+        }
+
+        const audio = new SoundSystem();
+
+        // --- Настройка Сцены ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87ceeb);
+        scene.fog = new THREE.Fog(0x87ceeb, 10, 50);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new THREE.PointerLockControls(camera, document.body);
+
+        // --- Управление Чувствительностью Мыши ---
+        const sensSlider = document.getElementById('sens-slider');
+        function applySensitivity() {
+            // В PointerLockControls скорость определяется через внутренний метод pointerMove
+            // Регулируем коэффициенты движения
+            const sens = parseFloat(sensSlider.value);
+            controls.pointerSpeed = sens;
+        }
+        sensSlider.addEventListener('input', applySensitivity);
+        applySensitivity();
+
+        // UI Элементы
+        const startMenu = document.getElementById('start-menu');
+        const settingsMenu = document.getElementById('settings-menu');
+
+        document.getElementById('btn-play').addEventListener('click', () => {
+            audio.init();
+            audio.startMusic();
+            controls.lock();
+        });
+
+        document.getElementById('btn-settings-open').addEventListener('click', () => {
+            startMenu.style.display = 'none';
+            settingsMenu.style.display = 'block';
+        });
+
+        document.getElementById('btn-settings-close').addEventListener('click', () => {
+            settingsMenu.style.display = 'none';
+            startMenu.style.display = 'block';
+        });
+
+        document.getElementById('btn-lang').addEventListener('click', () => {
+            currentLang = currentLang === 'ru' ? 'en' : 'ru';
+            updateLanguage();
+        });
+
+        document.getElementById('music-slider').addEventListener('input', (e) => {
+            audio.musicVolume = parseFloat(e.target.value);
+        });
+
+        document.getElementById('sfx-slider').addEventListener('input', (e) => {
+            audio.sfxVolume = parseFloat(e.target.value);
+        });
+
+        controls.addEventListener('lock', () => {
+            startMenu.style.display = 'none';
+            settingsMenu.style.display = 'none';
+        });
+
+        controls.addEventListener('unlock', () => {
+            if (!gameOver) {
+                startMenu.style.display = 'block';
+            }
+        });
+
+        // --- Освещение ---
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(20, 40, 20);
+        scene.add(dirLight);
+
+        // --- Карта и Препятствия ---
+        const MAP_SIZE = 50;
+        const floorGeo = new THREE.PlaneGeometry(MAP_SIZE, MAP_SIZE);
+        const floorMat = new THREE.MeshLambertMaterial({ color: 0x3a9d23 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        scene.add(floor);
+
+        const obstacles = []; // Для коллизий
+        const boxGeo = new THREE.BoxGeometry(4, 4, 4);
+        const boxMat = new THREE.MeshLambertMaterial({ color: 0x8b5a2b });
+
+        // Генерация укрытий
+        for (let i = 0; i < 16; i++) {
+            const box = new THREE.Mesh(boxGeo, boxMat);
+            box.position.x = (Math.random() - 0.5) * (MAP_SIZE - 10);
+            box.position.z = (Math.random() - 0.5) * (MAP_SIZE - 10);
+            box.position.y = 2;
+
+            // Исключаем спавн прямо на игроке
+            if (Math.abs(box.position.x) > 5 || Math.abs(box.position.z) > 5) {
+                scene.add(box);
+                obstacles.push(box);
+            }
+        }
+
+        // --- Жители ---
+        const totalVillagers = 5;
+        let villagersFound = 0;
+        const villagers = [];
+        const villagerGeo = new THREE.CylinderGeometry(0.5, 0.5, 2, 16);
+        const villagerMat = new THREE.MeshLambertMaterial({ color: 0xff0000 });
+
+        for (let i = 0; i < totalVillagers; i++) {
+            const v = new THREE.Mesh(villagerGeo, villagerMat);
+            v.position.x = (Math.random() - 0.5) * (MAP_SIZE - 8);
+            v.position.z = (Math.random() - 0.5) * (MAP_SIZE - 8);
+            v.position.y = 1;
+            v.userData = { found: false };
+            scene.add(v);
+            villagers.push(v);
+        }
+
+        // --- Физика и Коллизии (AABB) ---
+        const playerRadius = 0.6;
+        camera.position.set(0, 1.6, 0);
+
+        function checkCollision(newPos) {
+            // Границы карты
+            const halfMap = MAP_SIZE / 2 - 1;
+            if (Math.abs(newPos.x) > halfMap || Math.abs(newPos.z) > halfMap) return true;
+
+            // Коллизии с коробками
+            const playerBox = new THREE.Box3().setFromCenterAndSize(
+                new THREE.Vector3(newPos.x, 1, newPos.z),
+                new THREE.Vector3(playerRadius * 2, 2, playerRadius * 2)
+            );
+
+            for (let obs of obstacles) {
+                const obsBox = new THREE.Box3().setFromObject(obs);
+                if (playerBox.intersectsBox(obsBox)) return true;
+            }
+            return false;
+        }
+
+        // --- Игровой Процесс ---
+        let timeLeft = 10;
+        let gameOver = false;
+
+        function updateUI() {
+            const t = i18n[currentLang];
+            document.getElementById('timer').innerText = t.timer + timeLeft;
+            document.getElementById('score').innerText = `${t.score} ${villagersFound} / ${totalVillagers}`;
+        }
+
+        const countdown = setInterval(() => {
+            if (controls.isLocked && !gameOver) {
+                timeLeft--;
+                updateUI();
+
+                if (timeLeft <= 0) {
+                    endGame(false);
+                }
+            }
+        }, 1000);
+
+        function endGame(isWin) {
+            gameOver = true;
+            clearInterval(countdown);
+            controls.unlock();
+            audio.stopMusic();
+
+            const t = i18n[currentLang];
+            if (isWin) {
+                audio.playWinSound();
+                alert(t.win);
+            } else {
+                audio.playLoseSound();
+                alert(t.lose + `${villagersFound} / ${totalVillagers}`);
+            }
+            location.reload();
+        }
+
+        // Поиск (Raycasting)
+        const raycaster = new THREE.Raycaster();
+        window.addEventListener('click', () => {
+            if (!controls.isLocked || gameOver) return;
+
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            const intersects = raycaster.intersectObjects(villagers);
+
+            if (intersects.length > 0) {
+                const hit = intersects[0];
+                if (!hit.object.userData.found && hit.distance < 6) {
+                    hit.object.userData.found = true;
+                    hit.object.material.color.setHex(0x00ff00);
+
+                    audio.playFoundSound();
+                    villagersFound++;
+                    updateUI();
+
+                    if (villagersFound === totalVillagers) {
+                        endGame(true);
+                    }
+                }
+            }
+        });
+
+        // --- Движение и Отрисовка ---
+        const keys = { KeyW: false, KeyS: false, KeyA: false, KeyD: false };
+        document.addEventListener('keydown', (e) => { if (e.code in keys) keys[e.code] = true; });
+        document.addEventListener('keyup', (e) => { if (e.code in keys) keys[e.code] = false; });
+
+        const moveSpeed = 0.12;
+        const velocity = new THREE.Vector3();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (controls.isLocked && !gameOver) {
+                // Вычисление направления движения
+                velocity.x = Number(keys.KeyD) - Number(keys.KeyA);
+                velocity.z = Number(keys.KeyS) - Number(keys.KeyW);
+                velocity.normalize();
+
+                if (keys.KeyW || keys.KeyS || keys.KeyA || keys.KeyD) {
+                    // Проверка движения по оси X
+                    const oldPos = camera.position.clone();
+                    controls.moveRight(velocity.x * moveSpeed);
+                    if (checkCollision(camera.position)) camera.position.x = oldPos.x;
+
+                    // Проверка движения по оси Z
+                    controls.moveForward(-velocity.z * moveSpeed);
+                    if (checkCollision(camera.position)) camera.position.z = oldPos.z;
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        updateLanguage();
+        animate();
+    </script>
+</body>
+</html>

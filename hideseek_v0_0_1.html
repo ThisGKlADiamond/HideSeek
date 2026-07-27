@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Прятки 3D v0.0.1</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            user-select: none;
+        }
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-size: 20px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            pointer-events: none;
+        }
+        #instructions {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 20px;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 10px;
+            height: 10px;
+            background-color: white;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            border: 1px solid black;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <div id="timer">Время на поиск: 10</div>
+        <div id="score">Найдено жителей: 0 / 5</div>
+    </div>
+
+    <div id="crosshair"></div>
+
+    <div id="instructions">
+        <h1>Прятки v0.0.1</h1>
+        <p>Нажмите мышкой, чтобы начать</p>
+        <p><b>Управление:</b> WASD — движение, Мышь — обзор</p>
+        <p>У вас есть 10 секунд, чтобы найти всех жителей!</p>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
+
+    <script>
+        // --- Настройка сцены, камеры и рендера ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87ceeb); // Голубое небо
+        scene.fog = new THREE.Fog(0x87ceeb, 10, 50);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // --- Освобождение/Захват курсора (PointerLock) ---
+        const controls = new THREE.PointerLockControls(camera, document.body);
+        const instructions = document.getElementById('instructions');
+
+        instructions.addEventListener('click', () => {
+            controls.lock();
+        });
+
+        controls.addEventListener('lock', () => {
+            instructions.style.display = 'none';
+        });
+
+        controls.addEventListener('unlock', () => {
+            instructions.style.display = 'block';
+        });
+
+        // --- Освещение ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(20, 40, 20);
+        scene.add(dirLight);
+
+        // --- Окружение (Карта) ---
+        // Земля
+        const floorGeometry = new THREE.PlaneGeometry(60, 60);
+        const floorMaterial = new THREE.MeshLambertMaterial({ color: 0x3a9d23 });
+        const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+        floor.rotation.x = -Math.PI / 2;
+        scene.add(floor);
+
+        // Укрытия (Коробки / Стены)
+        const obstacles = [];
+        const boxGeometry = new THREE.BoxGeometry(4, 4, 4);
+        const boxMaterial = new THREE.MeshLambertMaterial({ color: 0x8b5a2b });
+
+        for (let i = 0; i < 15; i++) {
+            const box = new THREE.Mesh(boxGeometry, boxMaterial);
+            box.position.x = (Math.random() - 0.5) * 45;
+            box.position.z = (Math.random() - 0.5) * 45;
+            box.position.y = 2;
+            scene.add(box);
+            obstacles.push(box);
+        }
+
+        // --- Жители (Цели) ---
+        const totalVillagers = 5;
+        let villagersFound = 0;
+        const villagers = [];
+
+        const villagerGeometry = new THREE.CylinderGeometry(0.5, 0.5, 2, 16);
+        const villagerMaterial = new THREE.MeshLambertMaterial({ color: 0xff0000 }); // Красные персонажи
+
+        for (let i = 0; i < totalVillagers; i++) {
+            const villager = new THREE.Mesh(villagerGeometry, villagerMaterial);
+            // Прячем за препятствиями или случайно по карте
+            villager.position.x = (Math.random() - 0.5) * 40;
+            villager.position.z = (Math.random() - 0.5) * 40;
+            villager.position.y = 1;
+
+            villager.userData = { found: false };
+            scene.add(villager);
+            villagers.push(villager);
+        }
+
+        // --- Игрок и Управление ---
+        camera.position.y = 1.6; // Высота глаз
+        const moveSpeed = 0.15;
+        const keys = { KeyW: false, KeyS: false, KeyA: false, KeyD: false };
+
+        document.addEventListener('keydown', (e) => { if (e.code in keys) keys[e.code] = true; });
+        document.addEventListener('keyup', (e) => { if (e.code in keys) keys[e.code] = false; });
+
+        // --- Игровой таймер ---
+        let timeLeft = 10;
+        let gameOver = false;
+
+        const timerElement = document.getElementById('timer');
+        const scoreElement = document.getElementById('score');
+
+        const countdown = setInterval(() => {
+            if (controls.isLocked && !gameOver) {
+                timeLeft--;
+                timerElement.innerText = `Время на поиск: ${timeLeft}`;
+
+                if (timeLeft <= 0) {
+                    gameOver = true;
+                    clearInterval(countdown);
+                    alert(`Время вышло! Вы нашли ${villagersFound} из ${totalVillagers} жителей.`);
+                    location.reload(); // Перезапуск игры
+                }
+            }
+        }, 1000);
+
+        // --- Поиск жителей (Клик/Raycasting) ---
+        const raycaster = new THREE.Raycaster();
+
+        window.addEventListener('click', () => {
+            if (!controls.isLocked || gameOver) return;
+
+            // Луч пускается прямо из центра экрана
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            const intersects = raycaster.intersectObjects(villagers);
+
+            if (intersects.length > 0) {
+                const hitObject = intersects[0].object;
+
+                // Если попали в жителя на расстоянии не более 5 метров
+                if (!hitObject.userData.found && intersects[0].distance < 6) {
+                    hitObject.userData.found = true;
+                    hitObject.material.color.setHex(0x00ff00); // Меняем цвет на зелёный
+
+                    villagersFound++;
+                    scoreElement.innerText = `Найдено жителей: ${villagersFound} / ${totalVillagers}`;
+
+                    if (villagersFound === totalVillagers) {
+                        gameOver = true;
+                        clearInterval(countdown);
+                        setTimeout(() => {
+                            alert('Поздравляем! Вы нашли всех жителей!');
+                            location.reload();
+                        }, 100);
+                    }
+                }
+            }
+        });
+
+        // --- Основной игровой цикл ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (controls.isLocked && !gameOver) {
+                // Движение игрока
+                if (keys.KeyW) controls.moveForward(moveSpeed);
+                if (keys.KeyS) controls.moveForward(-moveSpeed);
+                if (keys.KeyA) controls.moveRight(-moveSpeed);
+                if (keys.KeyD) controls.moveRight(moveSpeed);
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // Подгонка под размер окна при изменении экрана
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
